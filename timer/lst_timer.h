@@ -48,7 +48,7 @@ class util_timer
         util_timer *prev;
         util_timer *next;
     public:
-        util_timer();
+        util_timer() : prev(NULL), next(NULL) {}
 };
 
 class sort_timer_lst
@@ -75,8 +75,8 @@ class Utils
         static int u_epollfd;
         int m_TIMESLOT;
     public:
-        Utils();
-        ~Utils();
+        Utils(){};
+        ~Utils(){};
 
         void init(int timeslot);
 
@@ -86,7 +86,7 @@ class Utils
 
         static void sig_handler(int sig);
 
-        void addsig(int sig,void(handler)(int),bool restart = true);
+        void addsig(int sig,void(*handler)(int),bool restart = true);
 
         void timer_handler();
 
