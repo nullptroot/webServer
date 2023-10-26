@@ -50,9 +50,22 @@ void time_wheel::add_timer(tw_timer *timer)
     }
     else
     {
-        timer->next = slots[ts];
-        slots[ts]->prev = timer;
-        slots[ts] = timer;
+        tw_timer *temp = slots[ts];
+        if(temp->rotation > timer->rotation)
+        {
+            timer->next = slots[ts];
+            slots[ts]->prev = timer;
+            slots[ts] = timer;
+        }
+        else
+        {
+            while(temp->rotation < timer->rotation)
+                temp = temp->next;
+            timer->prev = temp->prev;
+            temp->prev->next = timer;
+            temp->prev = timer;
+            timer->next = temp;
+        }
     }
 }
 /*只是 从wheel中删除节点，但是不释放内存呢
@@ -97,37 +110,30 @@ void time_wheel::tick()
     tw_timer *tmp = slots[cur_slot];
     printf("current slot is %d\n",cur_slot);
     /*这里每次都需要遍历cur_slot链表的所有元素*/
-    while(tmp != nullptr)
+    while(tmp->rotation == 0)
+        tmp = tmp->next;
+    slots[cur_slot] = tmp;
+    /*tmp前面的都需要删除*/
+    if(tmp->prev != nullptr)
     {
-        printf("tick the timer once\n");
-        if(tmp->rotation > 0)
+        tmp = tmp->prev;
+        tw_timer *pre = tmp->prev;
+        while(tmp != nullptr)
         {
-            --tmp->rotation;
-            tmp = tmp->next;
-        }
-        else
-        {
-            tmp->cb_func(tmp->user_data);
-            if(tmp == slots[cur_slot])
-            {
-                printf("delete hander in cur_slot\n");
-                slots[cur_slot] = tmp->next;
-                delete tmp;
-                if(slots[cur_slot] != nullptr)
-                    slots[cur_slot]->prev = nullptr;
-                tmp = slots[cur_slot];
-            }
-            else
-            {
-                tmp->prev->next = tmp->next;
-                if(tmp->next != nullptr)
-                    tmp->next->prev = tmp->prev;
-                tw_timer *tmp2 = tmp->next;
-                delete tmp;
-                tmp = tmp2;
-            }
+            delete tmp;
+            tmp = pre;
+            if(pre != nullptr)
+                pre = pre->prev;
         }
     }
+    /*后面的rotation都需要减一*/
+    slots[cur_slot]->prev = nullptr;
+    tmp = slots[cur_slot];
+    while(tmp != nullptr)
+    {
+        --tmp->rotation;
+        tmp = tmp->next;
+    }
     /*槽增加*/
-    cur_slot = (++cur_slot) % N
+    cur_slot = (++cur_slot) % N;
 }
