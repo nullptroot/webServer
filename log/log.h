@@ -31,6 +31,8 @@ class Log
         static void *flush_log_thread(void *args)
         {
             Log::get_instance()->async_write_log();
+            /*加上返回值  因为需要配合pthread所以 函数是这样的*/
+            return nullptr;
         }
         bool init(const char *file_name,int close_log,int log_buf_size = 8192,
                     int split_lines = 5000000,int max_queue_size = 0);
@@ -39,7 +41,8 @@ class Log
     private:
         Log();
         virtual ~Log();
-        void *async_write_log()
+        /*这里没有必要 返回void * 因此改成了void*/
+        void async_write_log()
         {
             std::string single_log;
             while(m_log_queue->pop(single_log))
@@ -60,9 +63,9 @@ if(0 == m_closs_log)
     Log::get_instance()->flush();
 }
 */
-#define LOG_DEBUG(format, ...) if(0 == m_closs_log) {Log::get_instance()->write_log(0,format,##__VA_ARGS__); Log::get_instance()->flush();}
-#define LOG_INFO(format, ...) if(0 == m_closs_log) {Log::get_instance()->write_log(1,format,##__VA_ARGS__); Log::get_instance()->flush();}
-#define LOG_WARN(format, ...) if(0 == m_closs_log) {Log::get_instance()->write_log(2,format,##__VA_ARGS__); Log::get_instance()->flush();}
-#define LOG_ERROR(format, ...) if(0 == m_closs_log) {Log::get_instance()->write_log(3,format,##__VA_ARGS__); Log::get_instance()->flush();}
+#define LOG_DEBUG(format, ...) if(0 == m_close_log) {Log::get_instance()->write_log(0,format,##__VA_ARGS__); Log::get_instance()->flush();}
+#define LOG_INFO(format, ...) if(0 == m_close_log) {Log::get_instance()->write_log(1,format,##__VA_ARGS__); Log::get_instance()->flush();}
+#define LOG_WARN(format, ...) if(0 == m_close_log) {Log::get_instance()->write_log(2,format,##__VA_ARGS__); Log::get_instance()->flush();}
+#define LOG_ERROR(format, ...) if(0 == m_close_log) {Log::get_instance()->write_log(3,format,##__VA_ARGS__); Log::get_instance()->flush();}
 
 #endif
