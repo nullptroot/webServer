@@ -4,11 +4,12 @@
 #include <exception>
 #include <pthread.h>
 #include "../locker/locker.h"
+#include "../CGImysql/sql_connection_pool.h"
 template <typename T>
 class threadpool
 {
     public:
-        threadpool(int actor_model,/*connection pool*/int thread_number = 8,int max_request = 10000);
+        threadpool(int actor_model,connection_pool *connPool,int thread_number = 8,int max_request = 10000);
         ~threadpool();
         bool append(T *request,int state);
         bool append_p(T *request);
@@ -23,10 +24,11 @@ class threadpool
         locker m_queuelocker;
         sem m_queuestat;
         /*connection pool*/
+        connection_pool *m_connPool
         int m_actor_model;
 };
 template<typename T>
-threadpool<T>::threadpool(int actor_model,/*connection pool*/int thread_number = 8,int max_request = 10000)
+threadpool<T>::threadpool(int actor_model,connection_pool *connPool,int thread_number,int max_request):m_actor_model(actor_model),m_thread_number(thread_number), m_max_requests(max_requests), m_threads(NULL),m_connPool(connPool)
 {
     if(thread_number <= 0 || max_request <= 0)
         throw std::exception();
@@ -115,6 +117,9 @@ void threadpool<T>::run()
                 {
                     request->improv = 1;
                     /*connection 操作*/
+                    /*从连接池中取一个赋给request->mysql 相当于给
+                    http_conn一个mysql连接*/
+                    connectionRAII mysqlcon(&request->mysql, m_connPool);
                     request->process();
                 }
                 else
@@ -137,6 +142,7 @@ void threadpool<T>::run()
         else
         {
             /*connection mysql*/
+            connectionRAII mysqlcon(&request->mysql, m_connPool);
             request->process();
         }   
     }
