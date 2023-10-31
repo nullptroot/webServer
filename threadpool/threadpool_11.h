@@ -42,8 +42,8 @@ class threadpool
 };
 template <typename T>
 threadpool<T>::threadpool(int actor_model,connection_pool *connPool,int thread_number,int max_request):
-                            m_thread_number(thread_number), m_max_requests(max_requests), 
-                            m_threads(NULL),m_connPool(connPool),m_actor_model(actor_model)
+                            m_thread_number(thread_number), m_max_request(max_request), 
+                            m_connPool(connPool),m_actor_model(actor_model)
 {
     if(thread_number <= 0 || max_request <= 0)
         throw std::exception();
@@ -104,7 +104,7 @@ void threadpool<T>::run()
             continue;
         if(m_actor_model == 1)
         {
-            if(request->state == 0)
+            if(request->m_state == 0)
             {
                 if(request->read_once())
                 {

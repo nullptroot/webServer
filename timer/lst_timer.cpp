@@ -1,5 +1,5 @@
 #include "lst_timer.h"
-#include "../http_conn"/http_conn.h"
+#include "../http/http_conn.h"
 
 sort_timer_lst::sort_timer_lst()
 {
@@ -147,6 +147,7 @@ int Utils::setnonblocking(int fd)
 void Utils::addfd(int epollfd,int fd,bool one_shot,int TRIGMode)
 {
     epoll_event event;
+    event.data.fd = fd;
     if(1 == TRIGMode)
         event.events = EPOLLIN | EPOLLET | EPOLLRDHUP;
     else

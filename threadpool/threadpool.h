@@ -24,11 +24,11 @@ class threadpool
         locker m_queuelocker;
         sem m_queuestat;
         /*connection pool*/
-        connection_pool *m_connPool
+        connection_pool *m_connPool;
         int m_actor_model;
 };
 template<typename T>
-threadpool<T>::threadpool(int actor_model,connection_pool *connPool,int thread_number,int max_request):m_actor_model(actor_model),m_thread_number(thread_number), m_max_requests(max_requests), m_threads(NULL),m_connPool(connPool)
+threadpool<T>::threadpool(int actor_model,connection_pool *connPool,int thread_number,int max_request):m_actor_model(actor_model),m_thread_number(thread_number), m_max_request(max_request), m_threads(NULL),m_connPool(connPool)
 {
     if(thread_number <= 0 || max_request <= 0)
         throw std::exception();
@@ -37,7 +37,7 @@ threadpool<T>::threadpool(int actor_model,connection_pool *connPool,int thread_n
         throw std::exception();
     for(int i = 0; i < thread_number; ++i)
     {
-        if(pthread_create(m_threads[i],nullptr,worker,this))
+        if(pthread_create(m_threads+i,nullptr,worker,this))
         {
             delete [] m_threads;
             throw std::exception();
@@ -79,7 +79,7 @@ bool threadpool<T>::append_p(T *request)
         m_queuelocker.unlock();
         return false;
     }
-    m_workqueue.push_back(reuqest);
+    m_workqueue.push_back(request);
     m_queuelocker.unlock();
     m_queuestat.post();
     return true;
@@ -111,7 +111,7 @@ void threadpool<T>::run()
             continue;
         if(m_actor_model == 1)
         {
-            if(request->state == 0)
+            if(request->m_state == 0)
             {
                 if(request->read_once())
                 {
