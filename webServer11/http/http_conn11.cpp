@@ -33,7 +33,7 @@ void http_conn::initmysql_result(connection_pool *connPool)
         users[temp1] = temp2;
     }
 }
-
+/*这个函数别忘记添加*/
 void http_conn::initMethodMap()
 {
     methodMap["GET"] = METHOD::GET;
@@ -49,6 +49,7 @@ void http_conn::initMethodMap()
 
 int http_conn::m_user_count = 0;
 int http_conn::m_epollfd = -1;
+int http_conn::m_close_log = 0;
 
 void http_conn::close_conn(bool real_close)
 {
@@ -87,7 +88,7 @@ void http_conn::init()
     // m_url = 0;
     // m_version = 0;
     m_content_length = 0;
-    m_host = 0;
+    // m_host = 0;
     m_start_line = 0;
     m_checked_idx = 0;
     m_read_idx = 0;
@@ -99,7 +100,7 @@ void http_conn::init()
 
     memset(m_read_buf,'\0',READ_BUFFER_SIZE);
     memset(m_write_buf,'\0',WRITE_BUFFER_SIZE);
-    memset(m_real_file,'\0',FILENAME_LEN);
+    // memset(m_real_file,'\0',FILENAME_LEN);
 }
 
 http_conn::LINE_STATUS http_conn::parse_line()//这个解析行  在linux高性能服务器的8.6 里面有注释为啥这样返回状态
@@ -225,7 +226,7 @@ http_conn::HTTP_CODE http_conn::parse_request_line(char *text)//这个也在8.6
     if ((m_url.size()) == 1)
         m_url += "judge.html";
         // strcat(m_url, "judge.html");
-    std::cout<<m_url<<std::endl;
+    // std::cout<<m_url<<std::endl;
     m_check_state = CHECK_STATE::CHECK_STATE_HEADER;
     return HTTP_CODE::NO_REQUEST;
 }
@@ -242,30 +243,27 @@ http_conn::HTTP_CODE http_conn::parse_headers(char *text)
         }
         return HTTP_CODE::GET_REQUEST;//这个标识读完头了 没有内容要读
     }
-    else if (strncasecmp(text, "Connection:", 11) == 0)
+    std::cmatch m;
+    reg.assign("(Connection:) *(keep-alive)|(Content-Length:) *(\\d+)|(Host:) *(.+:\\d+)");
+    if(std::regex_search(text,m,reg))
     {
-        text += 11;
-        text += strspn(text, " \t");
-        if (strcasecmp(text, "keep-alive") == 0)
+        if(m[1].str() == "Connection:")
         {
-            m_linger = true;
+            if(m[2].str() == "keep-alive")
+                m_linger = true;
         }
-    }
-    else if (strncasecmp(text, "Content-length:", 15) == 0)
-    {
-        text += 15;
-        text += strspn(text, " \t");
-        m_content_length = atol(text);
-    }
-    else if (strncasecmp(text, "Host:", 5) == 0)
-    {
-        text += 5;
-        text += strspn(text, " \t");
-        m_host = text;
-    }
-    else
-    {
-        LOG_INFO("oop!unknow header: %s", text);
+        else if(m[3].str() == "Content-Length:")
+        {
+            m_content_length = atol(m[4].str().c_str());
+        }
+        else if(m[5].str() == "Host:")
+        {
+            m_host = m[6].str();
+        }
+        else
+        {
+            LOG_INFO("oop!unknow header: %s", text);
+        }
     }
     return HTTP_CODE::NO_REQUEST;
 }
@@ -333,53 +331,63 @@ http_conn::HTTP_CODE http_conn::process_read()
 /*把请求的文件路径设置好，打开并映射到内存中*/
 http_conn::HTTP_CODE http_conn::do_request()
 {
-    strcpy(m_real_file,doc_root);
-    int len = strlen(doc_root);
+    // strcpy(m_real_file,doc_root);
+    m_real_file = doc_root;
+    int len = doc_root.size();
     int index = m_url.find('/');
     // const char *p = strrchr(m_url,'/');
     /*cgi == 1 表示是post请求 post请求有两个 一个是注册一个是登录*/
     if(cgi == 1 && m_url[index+1]=='2' || m_url[index+1] == '3')
     {
-        char flag = m_url[1];//2开头是请求登录 3开头是请求注册
+        // char flag = m_url[1];//2开头是请求登录 3开头是请求注册
         // char *m_url_real = (char *)malloc(sizeof(char)*200);
-        std::string m_url_real = "/";
+        // std::string m_url_real = "/";
         // strcpy(m_url_real,"/");
-        m_url_real += m_url.substr(2);
+        // m_url_real += m_url.substr(2);
         // strcat(m_url_real,m_url+2);/*把开头的数字过虑了*/
-        strncpy(m_real_file+len,m_url_real.c_str(),FILENAME_LEN-len-1);/*拼接好了文件路径和位置*/
+        // m_real_file += m_url_real;
+        // strncpy(m_real_file+len,m_url_real.c_str(),FILENAME_LEN-len-1);/*拼接好了文件路径和位置*/
         // free(m_url_real);
 
-        char name[100],password[100];
-        int i;
-        for(i = 5;m_string[i] != '&'; ++i)//等于5是因为"user="的长度
-            name[i-5] = m_string[i];
-        name[i-5] = '\0';
-        int j = 0;
-        for(i = i+10;m_string[i] != '\0'; ++i,++j)
-            password[j] = m_string[i];
-        password[j] = '\0';
+        // char name[100],password[100];
+        int gap = m_string.find('&');
+        std::string name = m_string.substr(5,gap-5);
+        std::string password = m_string.substr(gap+10);
+        // int i;
+        // for(i = 5;m_string[i] != '&'; ++i)//等于5是因为"user="的长度
+        //     name[i-5] = m_string[i];
+        // name[i-5] = '\0';
+        // int j = 0;
+        // for(i = i+10;m_string[i] != '\0'; ++i,++j)
+        //     password[j] = m_string[i];
+        // password[j] = '\0';
         /*注册界面*/
         if(m_url[index+1] == '3')
         {
-            char *sql_insert = (char *)malloc(sizeof(char) * 200);
+            // char *sql_insert = (char *)malloc(sizeof(char) * 200);
+            std::string sql_insert = "INSERT INTO user(username, passwd) VALUES('";
+            sql_insert += name;
+            sql_insert += "', '";
+            sql_insert += password;
+            sql_insert +="')";
 
             /*拼接mysql插入语句
             "INSERT INTO user(username, passwd) VALUES(name,password)*/
-            strcpy(sql_insert, "INSERT INTO user(username, passwd) VALUES(");
-            strcat(sql_insert, "'");
-            strcat(sql_insert, name);
-            strcat(sql_insert, "', '");
-            strcat(sql_insert, password);
-            strcat(sql_insert, "')");
+            // strcpy(sql_insert, "INSERT INTO user(username, passwd) VALUES(");
+            // strcat(sql_insert, "'");
+            // strcat(sql_insert, name);
+            // strcat(sql_insert, "', '");
+            // strcat(sql_insert, password);
+            // strcat(sql_insert, "')");
             /*下面的不会注册错误，只要名字不重复就注册成功
              只会出现重复注册的错误*/
             if(users.find(name) == users.end())
             {
                 int res;
-                std::mutex lock;
                 {
+                    std::mutex lock;
                     std::lock_guard<std::mutex> lk(lock);
-                    res = mysql_query(mysql.get(),sql_insert);
+                    res = mysql_query(mysql.get(),sql_insert.c_str());
                     users.insert(std::pair<std::string,std::string>(name,password));
                 }
                 if(res != 0)
@@ -401,54 +409,60 @@ http_conn::HTTP_CODE http_conn::do_request()
     /*注册界面*/
     if(m_url[index+1] == '0')
     {
-        char *m_url_real = (char *)malloc(sizeof(char) * 200);
-        strcpy(m_url_real, "/register.html");
-        strncpy(m_real_file + len, m_url_real, strlen(m_url_real));
+        m_real_file += "/register.html";
+        // char *m_url_real = (char *)malloc(sizeof(char) * 200);
+        // strcpy(m_url_real, "/register.html");
+        // strncpy(m_real_file + len, m_url_real, strlen(m_url_real));
 
-        free(m_url_real);
+        // free(m_url_real);
     }
     else if (m_url[index+1] == '1')//请求登录的界面
     {
-        char *m_url_real = (char *)malloc(sizeof(char) * 200);
-        strcpy(m_url_real, "/log.html");
-        strncpy(m_real_file + len, m_url_real, strlen(m_url_real));
+        m_real_file += "/log.html";
+        // char *m_url_real = (char *)malloc(sizeof(char) * 200);
+        // strcpy(m_url_real, "/log.html");
+        // strncpy(m_real_file + len, m_url_real, strlen(m_url_real));
 
-        free(m_url_real);
+        // free(m_url_real);
     }
     else if (m_url[index+1] == '5')
     {
-        char *m_url_real = (char *)malloc(sizeof(char) * 200);
-        strcpy(m_url_real, "/picture.html");
-        strncpy(m_real_file + len, m_url_real, strlen(m_url_real));
+        m_real_file += "/picture.html";
+        // char *m_url_real = (char *)malloc(sizeof(char) * 200);
+        // strcpy(m_url_real, "/picture.html");
+        // strncpy(m_real_file + len, m_url_real, strlen(m_url_real));
 
-        free(m_url_real);
+        // free(m_url_real);
     }
     else if (m_url[index+1] == '6')
     {
-        char *m_url_real = (char *)malloc(sizeof(char) * 200);
-        strcpy(m_url_real, "/video.html");
-        strncpy(m_real_file + len, m_url_real, strlen(m_url_real));
+        m_real_file += "/video.html";
+        // char *m_url_real = (char *)malloc(sizeof(char) * 200);
+        // strcpy(m_url_real, "/video.html");
+        // strncpy(m_real_file + len, m_url_real, strlen(m_url_real));
 
-        free(m_url_real);
+        // free(m_url_real);
     }
     else if (m_url[index+1] == '7')
     {
-        char *m_url_real = (char *)malloc(sizeof(char) * 200);
-        strcpy(m_url_real, "/fans.html");
-        strncpy(m_real_file + len, m_url_real, strlen(m_url_real));
+        m_real_file += "/fans.html";
+        // char *m_url_real = (char *)malloc(sizeof(char) * 200);
+        // strcpy(m_url_real, "/fans.html");
+        // strncpy(m_real_file + len, m_url_real, strlen(m_url_real));
 
-        free(m_url_real);
+        // free(m_url_real);
     }
     else
-        strncpy(m_real_file + len, m_url.c_str(), FILENAME_LEN - len - 1);
+        m_real_file += m_url;
+        // strncpy(m_real_file + len, m_url.c_str(), FILENAME_LEN - len - 1);
     
-    if(stat(m_real_file,&m_file_stat) < 0)
+    if(stat(m_real_file.c_str(),&m_file_stat) < 0)
         return HTTP_CODE::NO_REQUEST;
     if(!(m_file_stat.st_mode & S_IROTH))
         return HTTP_CODE::FORBIDDEN_REQUEST;
     if(S_ISDIR(m_file_stat.st_mode))
         return HTTP_CODE::BAD_REQUEST;
-    int fd = open(m_real_file,O_RDONLY);
+    int fd = open(m_real_file.c_str(),O_RDONLY);
     m_file_address = (char *)mmap(0,m_file_stat.st_size,PROT_READ,MAP_PRIVATE,fd,0);
     close(fd);
     return HTTP_CODE::FILE_REQUEST;

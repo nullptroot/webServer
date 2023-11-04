@@ -92,10 +92,11 @@ class http_conn
         int m_write_idx;
         CHECK_STATE m_check_state;
         METHOD m_method;
-        char m_real_file[FILENAME_LEN];
+        std::string m_real_file;
+        // char m_real_file[FILENAME_LEN];
         std::string m_url;
         std::string m_version;
-        char *m_host;
+        std::string m_host;
         long m_content_length;
         bool m_linger;
         char *m_file_address;
@@ -103,10 +104,10 @@ class http_conn
         struct iovec m_iv[2];/*请求文件的内容和响应头在这里*/
         int m_iv_count;
         int cgi;
-        char *m_string;
+        std::string m_string;
         int bytes_to_send;
         int bytes_have_send;
-        char *doc_root;
+        std::string doc_root;
 
         /*感觉这个变量 变为静态更好，所有对象共用一份
         下面的也需要 锁的*/
