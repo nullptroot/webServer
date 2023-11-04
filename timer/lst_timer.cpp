@@ -80,6 +80,14 @@ void sort_timer_lst::del_timer(util_timer *timer)
         delete timer;
         return;
     }
+    /*少写了几句*/
+    if (timer == tail)
+    {
+        tail = tail->prev;
+        tail->next = NULL;
+        delete timer;
+        return;
+    }
     timer->prev->next = timer->next;
     timer->next->prev = timer->prev;
     delete timer;
