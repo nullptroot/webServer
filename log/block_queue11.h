@@ -21,12 +21,14 @@ class block_queue
         int m_front;
         int m_back;
         int m_max_size;
+        bool stop;
     private:
         void init()
         {
             m_size = 0;
             m_front = -1;
             m_back = -1;
+            stop = false;
         }
     public:
         block_queue(int max_size = 10000):m_size(0),m_front(-1),m_back(-1)
@@ -36,6 +38,10 @@ class block_queue
             m_max_size = max_size;
             m_array.resize(m_max_size);
         }
+        ~block_queue(){
+            stop = true;
+            m_cond.notify_all();
+        };
         void clear()
         {
             {
@@ -108,7 +114,9 @@ class block_queue
         bool pop(T &item)
         {
             std::unique_lock<std::mutex> lk(m_mutex);
-            m_cond.wait(lk,[this]{return m_size > 0;});
+            m_cond.wait(lk,[this]{return m_size > 0 && stop == true;});
+            if(stop == true)
+                return false;
             /*没有错 是先加头再取元素的*/
             m_front = (m_front+1)%m_max_size;
             item = m_array[m_front];
@@ -120,8 +128,8 @@ class block_queue
             /*设置等待时长  单位是毫秒*/
             auto t = std::chrono::steady_clock::now() + std::chrono::milliseconds(ms_timeout);
             std::unique_lock<std::mutex> lk(m_mutex);
-            m_cond.wait_until(lk,t,[this]{return m_size > 0;});
-            if(m_size <= 0)
+            m_cond.wait_until(lk,t,[this]{return m_size > 0  && stop == true;});
+            if(m_size <= 0 || stop == true)
                 return false;
             m_front = (m_front+1)%m_max_size;
             item = m_array[m_front];
