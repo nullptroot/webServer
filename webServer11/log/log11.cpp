@@ -87,7 +87,9 @@ void Log::write_log(int level,const char *format, ...)
         m_fp.flush();
         m_fp.close();
 
-        std::string tail = std::to_string(my_tm.tm_year+1900)+"_"+std::to_string(my_tm.tm_mon+1)+"_"+std::to_string(my_tm.tm_mday) +"_";
+        std::string tail = std::to_string(my_tm.tm_year+1900)+"_"
+                            +std::to_string(my_tm.tm_mon+1)+"_"
+                            +std::to_string(my_tm.tm_mday) +"_";
 
         if(m_today != my_tm.tm_mday)
         {
@@ -106,6 +108,7 @@ void Log::write_log(int level,const char *format, ...)
 
     std::string log_str;
     lk.lock();
+    m_buf.clear();
     /*这里使得每条日志都带上了时间*/
     m_buf += std::to_string(my_tm.tm_year + 1900)+'-'
                 +std::to_string(my_tm.tm_mon + 1)+'-'
@@ -124,6 +127,7 @@ void Log::write_log(int level,const char *format, ...)
     int m = vsnprintf(temp,LOG_VAL_PARM-1,format,valist);
     m_buf += temp;
     log_str = m_buf;
+    log_str += '\n';
 
     lk.unlock();
 
@@ -132,7 +136,7 @@ void Log::write_log(int level,const char *format, ...)
     else
     {
         lk.lock();
-        m_fp<<log_str;
+        m_fp<<log_str<<std::endl;
         lk.unlock();
     }
     va_end(valist);

@@ -37,6 +37,7 @@ class block_queue
                 exit(-1);
             m_max_size = max_size;
             m_array.resize(m_max_size);
+            stop = false;
         }
         ~block_queue(){
             stop = true;
@@ -114,7 +115,7 @@ class block_queue
         bool pop(T &item)
         {
             std::unique_lock<std::mutex> lk(m_mutex);
-            m_cond.wait(lk,[this]{return m_size > 0 && stop == true;});
+            m_cond.wait(lk,[this]{return m_size > 0 || stop == true;});
             if(stop == true)
                 return false;
             /*没有错 是先加头再取元素的*/
@@ -128,7 +129,7 @@ class block_queue
             /*设置等待时长  单位是毫秒*/
             auto t = std::chrono::steady_clock::now() + std::chrono::milliseconds(ms_timeout);
             std::unique_lock<std::mutex> lk(m_mutex);
-            m_cond.wait_until(lk,t,[this]{return m_size > 0  && stop == true;});
+            m_cond.wait_until(lk,t,[this]{return m_size > 0  || stop == true;});
             if(m_size <= 0 || stop == true)
                 return false;
             m_front = (m_front+1)%m_max_size;
