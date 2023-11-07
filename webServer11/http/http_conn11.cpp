@@ -63,8 +63,8 @@ void http_conn::close_conn(bool real_close)
     }
 }
 
-void http_conn::init(int sockfd,const sockaddr_in &addr,char *root,int TRIGMode,
-                        int close_log,std::string user,std::string passwd,std::string sqlname)
+void http_conn::init(int sockfd,const sockaddr_in &addr,std::string root,int TRIGMode,
+                        int close_log,connection_pool *_mysql_pool)
 {
     m_sockfd = sockfd;
     m_address = addr;
@@ -74,13 +74,14 @@ void http_conn::init(int sockfd,const sockaddr_in &addr,char *root,int TRIGMode,
     m_user_count++;
     doc_root = root;
     m_close_log = close_log;
+    mysql_pool = _mysql_pool;
 
     init();
 }
 
 void http_conn::init()
 {
-    mysql = nullptr;
+    // mysql = nullptr;
     bytes_to_send = 0;
     bytes_have_send = 0;
     m_check_state = CHECK_STATE::CHECK_STATE_REQUESTLINE;
@@ -140,6 +141,7 @@ http_conn::LINE_STATUS http_conn::parse_line()//这个解析行  在linux高性�
             return LINE_STATUS::LINE_BAD;
         }
     }
+    return LINE_STATUS::LINE_OPEN;
 }
 /*这里出现读取失败的话
 int timer_flag;
@@ -342,24 +344,36 @@ http_conn::HTTP_CODE http_conn::do_request()
             sql_insert += "', '";
             sql_insert += password;
             sql_insert +="')";
-
+            // std::cout<<sql_insert<<std::endl;
+            // std::cout<<name<<"  "<<password<<std::endl;
             /*下面的不会注册错误，只要名字不重复就注册成功
              只会出现重复注册的错误*/
             if(users.find(name) == users.end())
             {
+                mysql = mysql_pool->GetConnection();
+                // std::cout<<"sasas"<<std::endl;
                 int res;
                 {
                     std::mutex lock;
                     std::lock_guard<std::mutex> lk(lock);
+                    // std::cout<<"sasas2"<<std::endl;
+                    // std::cout<<sql_insert.c_str()<<std::endl;
+                    // if(mysql.get() == NULL)
+                    //     std::cout<<"mysql nullptr"<<std::endl;
                     res = mysql_query(mysql.get(),sql_insert.c_str());
+                    // std::cout<<mysql_error(mysql.get())<<std::endl;
+                    // std::cout<<"sasas3"<<std::endl;
                     users.insert(std::pair<std::string,std::string>(name,password));
+                    // std::cout<<"sasas4"<<std::endl;
                 }
+                // std::cout<<"sasas1"<<std::endl;
                 if(res != 0)
                     m_url = "/log.html";
                 else
                     m_url = "/registerError.html";
             }
-            m_url = "/registerError.html";
+            else
+                m_url = "/registerError.html";
         }
         else if(m_url[index+1] == '2')
         {

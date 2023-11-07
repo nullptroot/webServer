@@ -26,7 +26,7 @@
 #include <unordered_map>
 #include <regex>
 
-#include "../locker/locker.h"
+// #include "../locker/locker.h"
 #include "../CGImysql/sql_connection_pool11.h"
 #include "../timer/lst_timer.h"
 #include "../log/log11.h"
@@ -78,9 +78,10 @@ class http_conn
     public:
         static int m_epollfd;
         static int m_user_count;
-        std::unique_ptr<MYSQL,connection_pool::deleteFunc> mysql;
+        connection_pool *mysql_pool;
         int m_state;
     private:
+        std::unique_ptr<MYSQL,connection_pool::deleteFunc> mysql;
         int m_sockfd;
         sockaddr_in m_address;
         std::regex reg;
@@ -120,9 +121,13 @@ class http_conn
         /*下面不知可行不可行*/
         http_conn():mysql(nullptr,connection_pool::deleteFunc(nullptr)){};
         ~http_conn(){};
+        /*因为类中有unique_ptr,因此当使用vector时
+        会涉及copy，但是unique_ptr是不可copy的，
+        因此我们只能移动*/
+        http_conn(const http_conn&) = delete;
+        http_conn(http_conn &&) = default;
     public:
-        void init(int sockfd,const sockaddr_in &addr,char *,int,int,std::string user,std::string passwd,
-                    std::string sqlname);
+        void init(int sockfd,const sockaddr_in &addr,std::string root,int,int,connection_pool *_mysql_pool);
         void close_conn(bool real_close = true);
         void process();
         bool read_once();

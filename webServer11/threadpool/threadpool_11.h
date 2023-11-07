@@ -11,7 +11,8 @@
 #include "../CGImysql/sql_connection_pool11.h"
 #include "../http/http_conn11.h"
 // #include <condition_variable>
-#include "../locker/locker.h"
+// #include "../../locker/locker.h"
+#include "../timer/Utils.h"
 template <typename T>
 class threadpool
 {
@@ -20,20 +21,20 @@ class threadpool
         ~threadpool() = default;
         bool append(T *request,int state);
         bool append_p(T *request);
-        void stop(){stop_threadpoll = true}
+        void stop(){stop_threadpoll = true;}
     private:
         void worker();
         void run();
-        void (*process)(T *request);
+        void (*process)(T *request,int);
     private:
         int m_thread_number;
         int m_max_request;
         bool stop_threadpoll;/*线程池停止*/
         std::vector<std::thread> m_threads;
         /*这里直接使用阻塞队列了*/
-        block_queue<T *> m_workqueue;
-        // std::list<T *> m_workqueue;/*这里的list 可以直接实现一个线程安全list 封装成一个类*/
-        // std::mutex m_mutex;
+        // block_queue<T *> m_workqueue;
+        std::list<T *> m_workqueue;/*这里的list 可以直接实现一个线程安全list 封装成一个类*/
+        std::mutex m_mutex;
         /*刚刚考虑了一下，发现这里不能使用条件变量来代替信号量
         因为这里有一个数量的关系，条件变量不管list中有多少元素
         只会通知一次，而且wait在没有伪唤醒的情况下，只有等待唤
@@ -42,7 +43,7 @@ class threadpool
         信号量会维持一个计数，当list中有元素的时候不会阻塞，直
         接向下执行*/
         // std::condition_variable m_queuestat;
-        // sem m_queuestat;
+        sem m_queuestat;
         // /*connection pool*/
 
 
@@ -51,8 +52,8 @@ class threadpool
         // connection_pool *m_connPool;
         int m_actor_model;
 };
-/*这里的函数可以换成其他的 赋给线程池*/
-void prces(http_conn *request,int model)
+/*这里的函数可以换成其他的 赋给线程池  非静态定义放到头文件就会multiple definition of*/
+static void prces(http_conn *request,int model)
 {
     if(model == 1)
     {
@@ -96,40 +97,40 @@ threadpool<T>::threadpool(int actor_model,int thread_number,int max_request):
                             m_thread_number(thread_number), m_max_request(max_request), 
                             m_actor_model(actor_model)
 {
-    process = prces;
+    process = &prces;
     stop_threadpoll = false;
     if(thread_number <= 0 || max_request <= 0)
         throw std::exception();
     for(int i = 0; i < thread_number; ++i)
     {
         m_threads.emplace_back(&threadpool::worker,this);
-        std::cout<<"create "<<i<<"th threads"<<std::endl;
+        // std::cout<<"create "<<i<<"th threads"<<std::endl;
         m_threads[i].detach();
     }
 }
 template <typename T>
 bool threadpool<T>::append(T *reuqest,int state)
 {
-        // std::unique_lock<std::mutex> lk(m_mutex);
-    if(m_workqueue.size() >= m_max_request || stop_threadpoll)
-        return false;
-    reuqest->m_state = state;
-    m_workqueue.push(reuqest);
-    // m_queuestat.notify_all();
-    // m_queuestat.post();
+    {
+        std::unique_lock<std::mutex> lk(m_mutex);
+        if(m_workqueue.size() >= m_max_request || stop_threadpoll)
+            return false;
+        reuqest->m_state = state;
+        m_workqueue.push_back(reuqest);
+    }
+    m_queuestat.post();
     return true;
 }
 template <typename T>
 bool threadpool<T>::append_p(T *request)
 {
-    // {
-        // std::unique_lock<std::mutex> lk(m_mutex);
-    if(m_workqueue.size() >= m_max_request || stop_threadpoll)
-        return false;
-    m_workqueue.push(request);
-    // }
-    // m_queuestat.notify_all();
-    // m_queuestat.post();
+    {
+        std::unique_lock<std::mutex> lk(m_mutex);
+        if(m_workqueue.size() >= m_max_request || stop_threadpoll)
+            return false;
+        m_workqueue.push_back(request);
+    }
+    m_queuestat.post();
     return true;
 }
 template <typename T>
@@ -141,16 +142,16 @@ template <typename T>
 void threadpool<T>::run()
 {
     while(!stop_threadpoll)
-    {
-        T *request = nullptr;
-        // m_queuestat.wait();
-        // {
-            // m_queuelocker.lock();
-            // std::lock_guard<std::mutex> lk(m_mutex);
-            // m_queuestat.wait(lk,[this]{return !m_workqueue.empty()})
-            // request = m_workqueue.front();
-        m_workqueue.pop(request);
-        // }
+    { 
+        T * request = nullptr;       
+        m_queuestat.wait();
+        {
+            std::lock_guard<std::mutex> lk(m_mutex);
+            if(m_workqueue.empty())
+                continue;
+            request = m_workqueue.front();
+            m_workqueue.pop_front();
+        }
         if(!request)
             continue;
         process(request,m_actor_model);

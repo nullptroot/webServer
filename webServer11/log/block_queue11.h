@@ -40,9 +40,11 @@ class block_queue
             stop = false;
         }
         ~block_queue(){
-            stop = true;
+            // stop = true;
+            stop_queue();
             m_cond.notify_all();
         };
+        void stop_queue(){stop = true;};
         void clear()
         {
             {

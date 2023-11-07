@@ -127,7 +127,7 @@ void Log::write_log(int level,const char *format, ...)
     int m = vsnprintf(temp,LOG_VAL_PARM-1,format,valist);
     m_buf += temp;
     log_str = m_buf;
-    log_str += '\n';
+    // log_str += '\n';
 
     lk.unlock();
 

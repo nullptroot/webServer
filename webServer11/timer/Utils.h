@@ -1,5 +1,65 @@
 #ifndef UTILS_H
 #define UTILS_H
+#include <unistd.h>
+#include <signal.h>
+#include <sys/types.h>
+#include <sys/epoll.h>
+#include <fcntl.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <unistd.h>
+#include <signal.h>
+#include <sys/types.h>
+#include <sys/epoll.h>
+#include <fcntl.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <assert.h>
+#include <sys/stat.h>
+#include <string.h>
+#include <pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/mman.h>
+#include <stdarg.h>
+#include <errno.h>
+#include <sys/wait.h>
+#include <sys/uio.h>
+#include <semaphore.h>
+#include <exception>
+
+#include <time.h>
+#include "client_data.h"
+
+class sem
+{
+    private:
+        sem_t m_sem;
+    public:
+        sem()
+        {
+            if(sem_init(&m_sem,0,0))
+                throw std::exception();
+        }
+        sem(int num)
+        {
+            if(sem_init(&m_sem,0,num))
+                throw std::exception();
+        }
+        ~sem()
+        {
+            sem_destroy(&m_sem);
+        }
+        bool wait()
+        {
+            return sem_wait(&m_sem);
+        }
+        bool post()
+        {
+            return sem_post(&m_sem);
+        }
+};
 
 template <typename T>
 class Utils_Timer
@@ -48,64 +108,5 @@ class Utils_fd
 
 };
 
-void Utils_fd::removefd(int epollfd, int fd)
-{
-    epoll_ctl(epollfd, EPOLL_CTL_DEL, fd, 0);
-    close(fd);
-}
-
-//将事件重置为EPOLLONESHOT
-void Utils_fd::modfd(int epollfd, int fd, int ev, int TRIGMode)
-{
-    epoll_event event;
-    event.data.fd = fd;
-
-    if (1 == TRIGMode)
-        event.events = ev | EPOLLET | EPOLLONESHOT | EPOLLRDHUP;
-    else
-        event.events = ev | EPOLLONESHOT | EPOLLRDHUP;
-
-    epoll_ctl(epollfd, EPOLL_CTL_MOD, fd, &event);
-}
-
-int Utils_fd::setnonblocking(int fd)
-{
-    int old_option = fcntl(fd,F_GETFL);
-    int new_option = old_option | O_NONBLOCK;
-    fcntl(fd,F_SETFL,new_option);
-    return old_option;
-}
-void Utils_fd::addfd(int epollfd,int fd,bool one_shot,int TRIGMode)
-{
-    epoll_event event;
-    event.data.fd = fd;
-    if(1 == TRIGMode)
-        event.events = EPOLLIN | EPOLLET | EPOLLRDHUP;
-    else
-        event.events = EPOLLIN | EPOLLRDHUP;
-    if(one_shot == true)
-        event.events |= EPOLLONESHOT;
-    epoll_ctl(epollfd,EPOLL_CTL_ADD,fd,&event);
-    setnonblocking(fd);
-}
-void Utils_fd::sig_handler(int sig)
-{
-    int save_error = errno;
-    int msg = sig;
-    send(u_pipefd[1],(char *)&msg,1,0);
-    errno = save_error;
-}
-void Utils_fd::addsig(int sig,void(*handler)(int),bool restart)
-{
-    struct sigaction sa;
-    memset(&sa,'\0',sizeof(sa));
-    sa.sa_handler = handler;
-    if(restart == true)
-        sa.sa_flags |= SA_RESTART;
-    sigfillset(&sa.sa_mask);
-    assert(sigaction(sig,&sa,nullptr) != -1);
-}
-int *Utils_fd::u_pipefd = 0;
-int Utils_fd::u_epollfd = 0;
 
 #endif

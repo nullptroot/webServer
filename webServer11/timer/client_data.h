@@ -8,5 +8,6 @@ struct client_data
     sockaddr_in address;
     int sockfd;
     T *timer;
+    void (*cb_func) (client_data *user_data);
 };
 #endif
