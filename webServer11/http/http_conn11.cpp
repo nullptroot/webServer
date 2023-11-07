@@ -1,4 +1,5 @@
 #include "http_conn11.h"
+#include "../timer/Utils.h"
 
 
 
@@ -56,7 +57,7 @@ void http_conn::close_conn(bool real_close)
     if(real_close && (m_sockfd != -1))
     {
         printf("close %d\n",m_sockfd);
-        Utils::removefd(m_epollfd,m_sockfd);
+        Utils_fd::removefd(m_epollfd,m_sockfd);
         m_sockfd = -1;
         m_user_count--;
     }
@@ -69,7 +70,7 @@ void http_conn::init(int sockfd,const sockaddr_in &addr,char *root,int TRIGMode,
     m_address = addr;
     /*这个模式的设置应该再前面的吧*/
     m_TRIGMode = TRIGMode;
-    Utils::addfd(m_epollfd,sockfd,true,m_TRIGMode);
+    Utils_fd::addfd(m_epollfd,sockfd,true,m_TRIGMode);
     m_user_count++;
     doc_root = root;
     m_close_log = close_log;
@@ -187,15 +188,6 @@ bool http_conn::read_once()
 //解析http请求行，获得请求方法，目标url及http版本号
 http_conn::HTTP_CODE http_conn::parse_request_line(char *text)//这个也在8.6
 {
-    //METHOD::GET / HTTP/1.1  测试了一下  text只有这个
-    // m_url = strpbrk(text, " \t");//返回' '和'\t'的位置，检查每一个字符 有' '和'\t'时就停下返回其位置
-    // if (!m_url)//如果请求行内没有空白符或\t就是有问题的
-    // {
-    //     return HTTP_CODE::BAD_REQUEST;
-    // }
-    // *m_url++ = '\0';
-    // char *method = text;//text是刚刚解析的一行内容
-    // std::string allStr(text);
     std::cmatch m;
     reg.assign("GET|POST|HEAD|PUT|DELETE|TRACE|OPTIONS|CONNECT|PATH");
     if(std::regex_search(text,m,reg) == 1)
@@ -205,7 +197,6 @@ http_conn::HTTP_CODE http_conn::parse_request_line(char *text)//这个也在8.6
     }
     else
         return HTTP_CODE::BAD_REQUEST;
-    //"GET /xxx.jpg HTTP/1.1";
     reg.assign("HTTP/\\d.\\d");
     if(std::regex_search(text,m,reg) == 1)
     {
@@ -225,8 +216,6 @@ http_conn::HTTP_CODE http_conn::parse_request_line(char *text)//这个也在8.6
     //当url为/时，显示判断界面
     if ((m_url.size()) == 1)
         m_url += "judge.html";
-        // strcat(m_url, "judge.html");
-    // std::cout<<m_url<<std::endl;
     m_check_state = CHECK_STATE::CHECK_STATE_HEADER;
     return HTTP_CODE::NO_REQUEST;
 }
@@ -337,48 +326,23 @@ http_conn::HTTP_CODE http_conn::do_request()
     int index = m_url.find('/');
     // const char *p = strrchr(m_url,'/');
     /*cgi == 1 表示是post请求 post请求有两个 一个是注册一个是登录*/
+
+    /*这里可以用策略模式+工厂模式，封装不同算法，*/
     if(cgi == 1 && m_url[index+1]=='2' || m_url[index+1] == '3')
     {
-        // char flag = m_url[1];//2开头是请求登录 3开头是请求注册
-        // char *m_url_real = (char *)malloc(sizeof(char)*200);
-        // std::string m_url_real = "/";
-        // strcpy(m_url_real,"/");
-        // m_url_real += m_url.substr(2);
-        // strcat(m_url_real,m_url+2);/*把开头的数字过虑了*/
-        // m_real_file += m_url_real;
-        // strncpy(m_real_file+len,m_url_real.c_str(),FILENAME_LEN-len-1);/*拼接好了文件路径和位置*/
-        // free(m_url_real);
-
-        // char name[100],password[100];
         int gap = m_string.find('&');
         std::string name = m_string.substr(5,gap-5);
         std::string password = m_string.substr(gap+10);
-        // int i;
-        // for(i = 5;m_string[i] != '&'; ++i)//等于5是因为"user="的长度
-        //     name[i-5] = m_string[i];
-        // name[i-5] = '\0';
-        // int j = 0;
-        // for(i = i+10;m_string[i] != '\0'; ++i,++j)
-        //     password[j] = m_string[i];
-        // password[j] = '\0';
         /*注册界面*/
         if(m_url[index+1] == '3')
         {
-            // char *sql_insert = (char *)malloc(sizeof(char) * 200);
+            /*拼接mysql插入语句*/
             std::string sql_insert = "INSERT INTO user(username, passwd) VALUES('";
             sql_insert += name;
             sql_insert += "', '";
             sql_insert += password;
             sql_insert +="')";
 
-            /*拼接mysql插入语句
-            "INSERT INTO user(username, passwd) VALUES(name,password)*/
-            // strcpy(sql_insert, "INSERT INTO user(username, passwd) VALUES(");
-            // strcat(sql_insert, "'");
-            // strcat(sql_insert, name);
-            // strcat(sql_insert, "', '");
-            // strcat(sql_insert, password);
-            // strcat(sql_insert, "')");
             /*下面的不会注册错误，只要名字不重复就注册成功
              只会出现重复注册的错误*/
             if(users.find(name) == users.end())
@@ -410,51 +374,25 @@ http_conn::HTTP_CODE http_conn::do_request()
     if(m_url[index+1] == '0')
     {
         m_real_file += "/register.html";
-        // char *m_url_real = (char *)malloc(sizeof(char) * 200);
-        // strcpy(m_url_real, "/register.html");
-        // strncpy(m_real_file + len, m_url_real, strlen(m_url_real));
-
-        // free(m_url_real);
     }
     else if (m_url[index+1] == '1')//请求登录的界面
     {
         m_real_file += "/log.html";
-        // char *m_url_real = (char *)malloc(sizeof(char) * 200);
-        // strcpy(m_url_real, "/log.html");
-        // strncpy(m_real_file + len, m_url_real, strlen(m_url_real));
-
-        // free(m_url_real);
     }
     else if (m_url[index+1] == '5')
     {
         m_real_file += "/picture.html";
-        // char *m_url_real = (char *)malloc(sizeof(char) * 200);
-        // strcpy(m_url_real, "/picture.html");
-        // strncpy(m_real_file + len, m_url_real, strlen(m_url_real));
-
-        // free(m_url_real);
     }
     else if (m_url[index+1] == '6')
     {
         m_real_file += "/video.html";
-        // char *m_url_real = (char *)malloc(sizeof(char) * 200);
-        // strcpy(m_url_real, "/video.html");
-        // strncpy(m_real_file + len, m_url_real, strlen(m_url_real));
-
-        // free(m_url_real);
     }
     else if (m_url[index+1] == '7')
     {
         m_real_file += "/fans.html";
-        // char *m_url_real = (char *)malloc(sizeof(char) * 200);
-        // strcpy(m_url_real, "/fans.html");
-        // strncpy(m_real_file + len, m_url_real, strlen(m_url_real));
-
-        // free(m_url_real);
     }
     else
         m_real_file += m_url;
-        // strncpy(m_real_file + len, m_url.c_str(), FILENAME_LEN - len - 1);
     
     if(stat(m_real_file.c_str(),&m_file_stat) < 0)
         return HTTP_CODE::NO_REQUEST;
@@ -481,7 +419,7 @@ bool http_conn::write()
 
     if(bytes_to_send == 0)
     {
-        Utils::modfd(m_epollfd,m_sockfd,EPOLLIN,m_TRIGMode);
+        Utils_fd::modfd(m_epollfd,m_sockfd,EPOLLIN,m_TRIGMode);
         init();
         return true;
     }
@@ -492,7 +430,7 @@ bool http_conn::write()
         {
             if(errno == EAGAIN)
             {
-                Utils::modfd(m_epollfd,m_sockfd,EPOLLOUT,m_TRIGMode);
+                Utils_fd::modfd(m_epollfd,m_sockfd,EPOLLOUT,m_TRIGMode);
                 return true;
             }
             unmap();
@@ -516,7 +454,7 @@ bool http_conn::write()
         if (bytes_to_send <= 0)
         {
             unmap();
-            Utils::modfd(m_epollfd, m_sockfd, EPOLLIN, m_TRIGMode);
+            Utils_fd::modfd(m_epollfd, m_sockfd, EPOLLIN, m_TRIGMode);
 
             if (m_linger)
             {
@@ -654,7 +592,7 @@ void http_conn::process()
     //process_read 这个函数已经把用户缓冲区的内容读完了，并且进行了解析，然后把请求的文件加载到了内存
     if (read_ret == HTTP_CODE::NO_REQUEST)//HTTP_CODE::NO_REQUEST 应该就是内容没有读完
     {
-        Utils::modfd(m_epollfd, m_sockfd, EPOLLIN, m_TRIGMode);//继续监听
+        Utils_fd::modfd(m_epollfd, m_sockfd, EPOLLIN, m_TRIGMode);//继续监听
         return;
     }
     bool write_ret = process_write(read_ret);//根据上面的读操作的返回值设置写缓冲区的内容（就是分析读的结果，然后设置写缓冲区）
@@ -662,7 +600,7 @@ void http_conn::process()
     {
         close_conn();
     }
-    Utils::modfd(m_epollfd, m_sockfd, EPOLLOUT, m_TRIGMode);
+    Utils_fd::modfd(m_epollfd, m_sockfd, EPOLLOUT, m_TRIGMode);
     //EPOLLOUT的触发条件之一，刚注册的就可以直接触发
     //写缓冲区从满到不满时直接触发，
     //客户端套接字刚连接可触发
