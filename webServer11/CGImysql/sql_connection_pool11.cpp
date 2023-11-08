@@ -1,7 +1,7 @@
 #include "sql_connection_pool11.h"
 #include <pthread.h>
 
-connection_pool::connection_pool()
+connection_pool::connection_pool():reserve(0)
 {
     m_CurConn = 0;
     m_FreeConn = 0;
@@ -52,7 +52,7 @@ void connection_pool::init(std::string url,std::string User,std::string PassWord
         connList.push_back(con);
         ++m_FreeConn;
     }
-    reserve = sem(m_FreeConn);
+    reserve.release(m_FreeConn);
 }
 std::unique_ptr<MYSQL,connection_pool::deleteFunc> connection_pool::GetConnection()
 {
@@ -60,7 +60,7 @@ std::unique_ptr<MYSQL,connection_pool::deleteFunc> connection_pool::GetConnectio
     if(connList.size() == 0)
         return std::unique_ptr<MYSQL,deleteFunc>(nullptr,deleteFunc(this));
     MYSQL *con;
-    reserve.wait();
+    reserve.acquire();
     {
         std::lock_guard<std::mutex> lk(lock);
         con = connList.front();
@@ -81,7 +81,7 @@ void connection_pool::ReleaseConnection(MYSQL *con)
         ++m_FreeConn;
         --m_CurConn;
     }
-    reserve.post();
+    reserve.release();
 }
 
 void connection_pool::DestroyPool()

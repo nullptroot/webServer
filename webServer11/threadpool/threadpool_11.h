@@ -1,5 +1,6 @@
 #ifndef THREADPOOL11_H
 #define THREADPOOL11_H
+// #define __cplusplus 201907L
 #include <list>
 #include <vector>
 #include <exception>
@@ -13,6 +14,8 @@
 // #include <condition_variable>
 // #include "../../locker/locker.h"
 #include "../timer/Utils.h"
+
+using sem = std::binary_semaphore;
 template <typename T>
 class threadpool
 {
@@ -95,7 +98,7 @@ static void prces(http_conn *request,int model)
 template <typename T>
 threadpool<T>::threadpool(int actor_model,int thread_number,int max_request):
                             m_thread_number(thread_number), m_max_request(max_request), 
-                            m_actor_model(actor_model)
+                            m_queuestat(0),m_actor_model(actor_model)
 {
     process = &prces;
     stop_threadpoll = false;
@@ -118,7 +121,8 @@ bool threadpool<T>::append(T *reuqest,int state)
         reuqest->m_state = state;
         m_workqueue.push_back(reuqest);
     }
-    m_queuestat.post();
+    m_queuestat.release();
+    // m_queuestat.post();
     return true;
 }
 template <typename T>
@@ -130,7 +134,8 @@ bool threadpool<T>::append_p(T *request)
             return false;
         m_workqueue.push_back(request);
     }
-    m_queuestat.post();
+    m_queuestat.release();
+    // m_queuestat.post();
     return true;
 }
 template <typename T>
@@ -143,8 +148,9 @@ void threadpool<T>::run()
 {
     while(!stop_threadpoll)
     { 
-        T * request = nullptr;       
-        m_queuestat.wait();
+        T * request = nullptr;
+        m_queuestat.acquire();    
+        // m_queuestat.wait();
         {
             std::lock_guard<std::mutex> lk(m_mutex);
             if(m_workqueue.empty())

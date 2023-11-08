@@ -1,6 +1,6 @@
 #ifndef _CONNECTION_POLL_H
 #define _CONNECTION_POLL_H
-
+// #define __cplusplus 201907L
 #include <stdio.h>
 #include <list>
 #include <mysql/mysql.h>
@@ -8,6 +8,7 @@
 #include <string.h>
 #include <iostream>
 #include <string>
+#include <semaphore>
 #include "../timer/Utils.h"
 // #include "../../locker/locker.h"
 #include "../log/log11.h"
@@ -24,6 +25,7 @@
 unique_ptr 结束就能直接回收
 连接资源*/
 
+using sem = std::binary_semaphore;
 
 class connection_pool
 {
